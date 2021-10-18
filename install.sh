@@ -2,7 +2,7 @@
 
 # Author: John Carter
 # Created: 2021/10/17 19:27:01
-# Last modified: 2021/10/17 20:02:41
+# Last modified: 2021/10/18 11:36:54
 
 # NOTE: Must be run as root
 # https://raspberrypi.stackexchange.com/questions/78715/motion-daemon-var-log-motion-motion-log-permission-denied
@@ -42,5 +42,8 @@ sed -i 's/daemon off/daemon on/' /etc/motion/motion.conf
 sed -i 's/stream_localhost off/stream_localhost on/' /etc/motion/motion.conf
 sed -i 's/webcontrol_localhost off/webcontrol_localhost off/' /etc/motion/motion.conf
 
-sudo service motion start
-sudo service motion status
+service motion start
+service motion status
+
+echo "[${GRN}INFO${END}] Rebooting for all changes to take effect"
+reboot
