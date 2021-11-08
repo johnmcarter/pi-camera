@@ -2,7 +2,7 @@
 
 # Author: John Carter
 # Created: 2021/10/17 19:27:01
-# Last modified: 2021/10/18 11:36:54
+# Last modified: 2021/11/07 8:36:54
 
 # NOTE: Must be run as root
 # https://raspberrypi.stackexchange.com/questions/78715/motion-daemon-var-log-motion-motion-log-permission-denied
