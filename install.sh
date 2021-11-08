@@ -40,7 +40,7 @@ sed -i 's/daemon off/daemon on/' /etc/motion/motion.conf
 
 # allowing streaming to devices besides localhost
 sed -i 's/stream_localhost off/stream_localhost on/' /etc/motion/motion.conf
-sed -i 's/webcontrol_localhost off/webcontrol_localhost off/' /etc/motion/motion.conf
+sed -i 's/webcontrol_localhost off/webcontrol_localhost on/' /etc/motion/motion.conf
 
 service motion start
 service motion status
