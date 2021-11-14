@@ -13,4 +13,4 @@ http://localhost:8080
 `
 
 ## Compatibility
-This package was tested on a Raspberry Pi 4 (4 GB Ram). It should work on other Raspberry Pi 4 devices as well as a Raspberry Pi 3.
+This package was tested on a Raspberry Pi 4 (4 GB RAM). It should work on other Raspberry Pi 4 devices as well as a Raspberry Pi 3.
