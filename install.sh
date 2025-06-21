@@ -5,78 +5,95 @@ GRN=$'\e[1;32m'
 RED=$'\e[1;31m'
 END=$'\e[0m'
 
-
 if (( EUID != 0 )); then
-   echo "[${RED}ERROR${END}] This script must be run as root" 
+   echo "[${RED}ERROR${END}] This script must be run as root"
    exit 1
 fi
 
 echo "[${GRN}INFO${END}] Changing hostname to picamera"
-cat > /etc/hostname <<EOF
-picamera
-EOF
-sed -i 's/127.0.0.1 raspberrypi/127.0.0.1 picamera/' /etc/hosts
+echo "picamera" > /etc/hostname
+sed -i 's/127.0.1.1 .*/127.0.1.1 picamera/' /etc/hosts
 
-echo "[${GRN}INFO${END}] Updating and installing necessary packages"
+echo "[${GRN}INFO${END}] Installing required packages..."
 apt-get update
 apt-get install -y vim motion
 
-echo "[${GRN}INFO${END}] Configuring motion and setting up service"
+echo "[${GRN}INFO${END}] Loading camera module..."
 if ! grep -q "bcm2835-v4l2" /etc/modules; then
     echo "bcm2835-v4l2" >> /etc/modules
 fi
 modprobe bcm2835-v4l2
 
-# turning on daemon
-cat > /etc/default/motion <<EOF
-start_motion_daemon=yes
+echo "[${GRN}INFO${END}] Ensuring motion user has camera access..."
+usermod -aG video motion
+
+echo "[${GRN}INFO${END}] Creating log/output directories with proper ownership..."
+mkdir -p /var/log/motion /var/lib/motion
+chown motion:motion /var/log/motion /var/lib/motion
+chmod 755 /var/log/motion /var/lib/motion
+
+echo "[${GRN}INFO${END}] Updating motion configuration..."
+CONF="/etc/motion/motion.conf"
+sed -i 's/^daemon .*/daemon on/' "$CONF"
+sed -i 's/^stream_localhost .*/stream_localhost off/' "$CONF"
+sed -i 's/^webcontrol_localhost .*/webcontrol_localhost off/' "$CONF"
+sed -i 's/^width .*/width 1920/' "$CONF"
+sed -i 's/^height .*/height 1080/' "$CONF"
+sed -i 's/^framerate .*/framerate 30/' "$CONF"
+sed -i 's/^[;#]*\s*text_left.*/text_left PiCam/' "$CONF"
+sed -i 's/^[;#]*\s*text_right.*/text_right %Y-%m-%d\\n%T/' "$CONF"
+
+# Set MJPEG pixel format
+if grep -q "^video_params " "$CONF"; then
+    sed -i 's/^video_params .*/video_params pixelformat=MJPG/' "$CONF"
+else
+    echo "video_params pixelformat=MJPG" >> "$CONF"
+fi
+
+# Set camera name
+if grep -q "^camera_name " "$CONF"; then
+    sed -i 's/^camera_name .*/camera_name PiCam/' "$CONF"
+else
+    echo "camera_name PiCam" >> "$CONF"
+fi
+
+echo "[${GRN}INFO${END}] Writing custom systemd unit to run as motion user..."
+
+cat > /etc/systemd/system/motion.service <<EOF
+[Unit]
+Description=Motion detection video capture daemon
+Documentation=man:motion(1)
+
+[Service]
+User=motion
+Group=motion
+ExecStart=/usr/bin/motion -c /etc/motion/motion.conf
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
 EOF
 
-sed -i 's/^daemon .*/daemon on/' /etc/motion/motion.conf 
+echo "[${GRN}INFO${END}] Enabling and starting motion service..."
+systemctl daemon-reexec
+systemctl daemon-reload
+systemctl enable motion
+systemctl restart motion
+sleep 2
 
-# allowing streaming to devices besides localhost
-sed -i 's/^stream_localhost .*/stream_localhost off/' /etc/motion/motion.conf
-sed -i 's/^webcontrol_localhost .*/webcontrol_localhost off/' /etc/motion/motion.conf
+systemctl restart motion
 
-# Set high resolution and framerate
-sed -i 's/^width .*/width 1920/' /etc/motion/motion.conf
-sed -i 's/^height .*/height 1080/' /etc/motion/motion.conf
-sed -i 's/^framerate .*/framerate 30/' /etc/motion/motion.conf
+# Wait up to 5 seconds for motion to become active
+for i in {1..5}; do
+    if systemctl is-active --quiet motion; then
+        IP_ADDRESS=$(hostname -I | awk '{print $1}')
+        echo "[${GRN}✓${END}] Motion service is running"
+        echo "[${GRN}INFO${END}] Stream:       http://${IP_ADDRESS}:8081"
+        echo "[${GRN}INFO${END}] Web control:  http://${IP_ADDRESS}:8080"
+        exit 0
+    fi
+    sleep 1
+done
 
-# Set pixel format to MJPG for high resolution support
-if ! grep -q "^video_params " /etc/motion/motion.conf; then
-    echo "video_params pixelformat=MJPG" >> /etc/motion/motion.conf
-else
-    sed -i 's/^video_params .*/video_params pixelformat=MJPG/' /etc/motion/motion.conf
-fi
-
-# Set camera name idempotently
-if ! grep -q "^camera_name " /etc/motion/motion.conf; then
-    echo "camera_name PiCam" >> /etc/motion/motion.conf
-else
-    sed -i 's/^camera_name .*/camera_name PiCam/' /etc/motion/motion.conf
-fi
-
-# Ensure overlay text shows the camera name and timestamp
-# Remove comment semicolon and whitespace before setting
-sed -i 's/^[;#]\?\s*text_left.*/text_left PiCam/' /etc/motion/motion.conf
-sed -i 's/^[;#]\?\s*text_right.*/text_right %Y-%m-%d\\n%T/' /etc/motion/motion.conf
-
-# Add motion user to video group to access camera
-usermod -a -G video motion
-
-# Create log directory and set permissions
-mkdir -p /var/log/motion
-chown motion:motion /var/log/motion
-chmod 755 /var/log/motion
-
-# Create output directory and set permissions
-mkdir -p /var/lib/motion
-chown motion:motion /var/lib/motion
-chmod 755 /var/lib/motion
-
-service motion restart
-service motion status
-
-echo "[${GRN}INFO${END}] Rebooting for all changes to take effect"
-#reboot
+echo "[${RED}✗${END}] Motion failed to start. Check logs:"
+echo "    sudo journalctl -u motion -f"
