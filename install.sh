@@ -50,14 +50,17 @@ else
     sed -i 's/^video_params .*/video_params pixelformat=MJPG/' /etc/motion/motion.conf
 fi
 
-# Set camera name idempotently, and display it on the stream
+# Set camera name idempotently
 if ! grep -q "^camera_name " /etc/motion/motion.conf; then
     echo "camera_name PiCam" >> /etc/motion/motion.conf
 else
     sed -i 's/^camera_name .*/camera_name PiCam/' /etc/motion/motion.conf
 fi
-sed -i 's/^;? *text_left .*/text_left PiCam/' /etc/motion/motion.conf
-sed -i 's/^;? *text_right .*/text_right %Y-%m-%d\\n%T/' /etc/motion/motion.conf
+
+# Ensure overlay text shows the camera name and timestamp
+# Remove comment semicolon and whitespace before setting
+sed -i 's/^[;#]\?\s*text_left.*/text_left PiCam/' /etc/motion/motion.conf
+sed -i 's/^[;#]\?\s*text_right.*/text_right %Y-%m-%d\\n%T/' /etc/motion/motion.conf
 
 # Add motion user to video group to access camera
 usermod -a -G video motion
